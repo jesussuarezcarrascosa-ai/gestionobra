@@ -216,7 +216,7 @@ function App(){
   const login=(u,p)=>{
     const usr=(users||[]).find(x=>x.username===u&&x.password===p);
     if(!usr)return false;
-    setSess(usr);setPage(usr.role==="manager"?"dash":"nuevo");
+    setSess(usr);setPage(usr.role==="manager"?"dash":usr.role==="capataz"?"nuevo":"nuevo");
     return true;
   };
   const logout=()=>{setSess(null);setPage("login");};
@@ -231,6 +231,7 @@ function App(){
 
   if(!sess)return <Login onLogin={login}/>;
   if(sess.role==="manager")return <Admin sess={sess} obras={obras} sO={sO} partes={partes} sP={sP} page={page} setPage={setPage} logout={logout} users={users} sU={sU} sync={sync} syncMsg={syncMsg} syncing={syncing}/>;
+  if(sess.role==="capataz")return <Capataz sess={sess} obras={obras} partes={partes} sP={sP} page={page} setPage={setPage} logout={logout} users={users} sU={sU}/>;
   return <Worker sess={sess} obras={obras} partes={partes} sP={sP} page={page} setPage={setPage} logout={logout} users={users} sU={sU}/>;
 }
 
@@ -405,35 +406,76 @@ function Obras({obras,sO}){
 
 function Equipo({users,sU}){
   const [n,setN]=useState("");const [u,setU]=useState("");const [p,setP]=useState("");
+  const [rol,setRol]=useState("worker");
   const [err,setE]=useState("");const [ok,setOk]=useState("");
   const ws=(users||[]).filter(x=>x.role==="worker");
+  const caps=(users||[]).filter(x=>x.role==="capataz");
   const add=()=>{
     if(!n.trim()||!u.trim()||!p.trim()){setE("Completa todos los campos");return;}
     if((users||[]).find(x=>x.username===u.trim())){setE("Ese usuario ya existe");return;}
-    sU([...(users||[]),{username:u.trim(),password:p,role:"worker",name:n.trim()}]);
-    setN("");setU("");setP("");setE("");setOk("Trabajador anadido");setTimeout(()=>setOk(""),3000);
+    sU([...(users||[]),{username:u.trim(),password:p,role:rol,name:n.trim()}]);
+    setN("");setU("");setP("");setE("");
+    setOk((rol==="capataz"?"Encargado":"Trabajador")+" anadido");
+    setTimeout(()=>setOk(""),3000);
+  };
+  const toggleCapataz=(user)=>{
+    const newRole = user.role==="capataz"?"worker":"capataz";
+    sU((users||[]).map(x=>x.username===user.username?{...x,role:newRole}:x));
   };
   return(
     <div className="pw" style={{padding:"24px 20px",maxWidth:800}}>
       <h2 className="pt">Equipo</h2>
       <div className="cd">
-        <h3 className="ctit">Anadir trabajador</h3>
+        <h3 className="ctit">Anadir usuario</h3>
         <div className="fg"><label className="lb">Nombre completo</label><input className="fi" value={n} onChange={e=>setN(e.target.value)} placeholder="Nombre Apellidos"/></div>
         <div className="fg"><label className="lb">Usuario</label><input className="fi" value={u} onChange={e=>setU(e.target.value)} placeholder="usuario" autoCapitalize="none" autoCorrect="off"/></div>
         <div className="fg"><label className="lb">Contrasena</label><input className="fi" value={p} onChange={e=>setP(e.target.value)} placeholder="contrasena"/></div>
+        <div className="fg">
+          <label className="lb">Rol</label>
+          <select className="fi" value={rol} onChange={e=>setRol(e.target.value)}>
+            <option value="worker">Trabajador</option>
+            <option value="capataz">Encargado</option>
+          </select>
+        </div>
         {err&&<p className="er">{err}</p>}
         {ok&&<p className="ok">{ok}</p>}
-        <button className="bp" style={{marginTop:8,width:"100%"}} onClick={add}>+ Anadir trabajador</button>
+        <button className="bp" style={{marginTop:8,width:"100%"}} onClick={add}>+ Anadir usuario</button>
       </div>
+
+      {/* Encargados */}
       <div className="cd">
-        <h3 className="ctit">Plantilla ({ws.length} trabajadores)</h3>
+        <h3 className="ctit">Encargados ({caps.length})</h3>
+        {caps.length===0&&<p className="em">Sin encargados. Puedes ascender a un trabajador pulsando "Hacer encargado".</p>}
+        {caps.map(w=>(
+          <div key={w.username} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #f1f5f9",gap:8,flexWrap:"wrap"}}>
+            <div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <div style={{fontWeight:700,color:"#1e293b",fontSize:14}}>{w.name}</div>
+                <span className="bg2" style={{background:"#fef3c7",color:"#92400e"}}>Encargado</span>
+              </div>
+              <div style={{fontSize:12,color:"#6b7280"}}>Usuario: <b>{w.username}</b></div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="bw" onClick={()=>toggleCapataz(w)}>Pasar a trabajador</button>
+              <button className="bd" onClick={()=>{if(confirm("Eliminar a "+w.name+"?"))sU((users||[]).filter(x=>x.username!==w.username));}}>Eliminar</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Trabajadores */}
+      <div className="cd">
+        <h3 className="ctit">Trabajadores ({ws.length})</h3>
         {ws.map(w=>(
-          <div key={w.username} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #f1f5f9",gap:8}}>
+          <div key={w.username} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid #f1f5f9",gap:8,flexWrap:"wrap"}}>
             <div>
               <div style={{fontWeight:700,color:"#1e293b",fontSize:14}}>{w.name}</div>
               <div style={{fontSize:12,color:"#6b7280"}}>Usuario: <b>{w.username}</b></div>
             </div>
-            <button className="bd" onClick={()=>{if(confirm("Eliminar a "+w.name+"?"))sU((users||[]).filter(x=>x.username!==w.username));}}>Eliminar</button>
+            <div style={{display:"flex",gap:8}}>
+              <button className="bw" onClick={()=>toggleCapataz(w)}>Hacer encargado</button>
+              <button className="bd" onClick={()=>{if(confirm("Eliminar a "+w.name+"?"))sU((users||[]).filter(x=>x.username!==w.username));}}>Eliminar</button>
+            </div>
           </div>
         ))}
       </div>
@@ -970,6 +1012,215 @@ function MiCuenta({sess,users,sU}){
         {okP&&<p className="ok">{okP}</p>}
         <button className="bp" style={{width:"100%",padding:13,marginTop:8}} onClick={cambiarPass} disabled={!pa||!pn||!pr}>Cambiar contrasena</button>
       </div>
+    </div>
+  );
+}
+
+
+/* \u2500\u2500 MODAL ANADIR TRABAJADOR AL PARTE \u2500\u2500 */
+function ModalAnadirTrabajador({parte, users, obras, onClose, onAdd}){
+  const workers = (users||[]).filter(u=>u.role==="worker"||u.role==="capataz");
+  const [sel, setSel] = useState("");
+  const [ents, setEnts] = useState(
+    // Copiar las entradas del parte original como base
+    (parte.entries||[]).map(e=>({...e}))
+  );
+  const [err, setErr] = useState("");
+
+  const updEnt=(i,f,v)=>{
+    const e=[...ents]; e[i]={...e[i],[f]:v};
+    if(f==="horaEntrada"||f==="horaSalida"){
+      const ei=e[i];
+      const hE2=f==="horaEntrada"?v:ei.horaEntrada;
+      const hS2=f==="horaSalida"?v:ei.horaSalida;
+      if(hE2&&hS2){
+        const[hh,mm]=hE2.split(":").map(Number);
+        const[hs,ms]=hS2.split(":").map(Number);
+        let min=(hs*60+ms)-(hh*60+mm);
+        if(min<0)min+=24*60;
+        const tot=min/60;
+        let noc=0,cur=hh*60+mm;
+        for(let t=cur;t<cur+min;t++){const tt=t%(24*60);if(tt>=22*60||tt<6*60)noc+=1/60;}
+        e[i].totalHoras=Math.round(tot*100)/100;
+        e[i].horasNocturnas=Math.round(noc*100)/100;
+        // Recalc ord/extra for all entries
+        let rem=Math.min(e.reduce((s,x)=>s+(x.totalHoras||0),0),8);
+        e.forEach((x,j)=>{
+          const h=x.totalHoras||0;
+          const ord=Math.min(h,rem);rem=Math.max(rem-ord,0);
+          e[j].horasOrdinarias=Math.round(ord*100)/100;
+          e[j].horasExtra=Math.round(Math.max(h-ord,0)*100)/100;
+        });
+      }
+    }
+    if(f==="dieta"&&v)e[i].mediaDieta=false;
+    if(f==="mediaDieta"&&v)e[i].dieta=false;
+    setEnts(e);
+  };
+
+  const confirmar=()=>{
+    if(!sel){setErr("Selecciona un trabajador");return;}
+    const worker = (users||[]).find(u=>u.username===sel);
+    if(!worker){setErr("Trabajador no encontrado");return;}
+    // Create new parte for the selected worker
+    const nuevoParte = {
+      date: parte.date,
+      worker: sel,
+      entries: ents,
+      observaciones: parte.observaciones||"",
+      id: Date.now()+Math.random(),
+      creadoPorCapataz: true,
+    };
+    onAdd(nuevoParte);
+    onClose();
+  };
+
+  return(
+    <div className="mb" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="md" style={{maxWidth:560}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h3 style={{fontSize:16,fontWeight:800,color:"#1a3a5c"}}>Anadir trabajador al parte</h3>
+          <button onClick={onClose} style={{border:"none",background:"#f1f5f9",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16}}>X</button>
+        </div>
+
+        {/* Info parte original */}
+        <div style={{background:"#f0f9ff",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:13,color:"#0369a1"}}>
+          <b>Parte original:</b> {fmt(parte.date)} \u2014
+          {(parte.entries||[]).map((e,i)=><span key={i} style={{marginLeft:6}}><span className="ct">{e.obra}</span></span>)}
+        </div>
+
+        {/* Selector de trabajador */}
+        <div className="fg">
+          <label className="lb">Trabajador a anadir</label>
+          <select className="fi" value={sel} onChange={e=>setSel(e.target.value)}>
+            <option value="">Selecciona un trabajador</option>
+            {workers.map(w=><option key={w.username} value={w.username}>{w.name}</option>)}
+          </select>
+        </div>
+
+        {/* Entradas editables */}
+        <div style={{fontWeight:700,color:"#374151",fontSize:14,marginBottom:12}}>
+          Datos del parte (puedes modificarlos):
+        </div>
+        {ents.map((en,i)=>{
+          const ob=(obras||[]).find(o=>o.code===en.obra);
+          return(
+            <div key={i} className="ec" style={{marginBottom:10}}>
+              <div style={{fontWeight:700,color:"#1a3a5c",fontSize:13,marginBottom:10}}>
+                <span className="ct">{en.obra}</span>
+                <span style={{marginLeft:8,fontWeight:400,color:"#6b7280",fontSize:12}}>{ob?ob.name:""}</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+                <div className="fg" style={{marginBottom:0}}>
+                  <label className="lb">Entrada</label>
+                  <input className="fi" type="time" value={en.horaEntrada||""} onChange={e=>updEnt(i,"horaEntrada",e.target.value)}/>
+                </div>
+                <div className="fg" style={{marginBottom:0}}>
+                  <label className="lb">Salida</label>
+                  <input className="fi" type="time" value={en.horaSalida||""} onChange={e=>updEnt(i,"horaSalida",e.target.value)}/>
+                </div>
+                <div className="fg" style={{marginBottom:0}}>
+                  <label className="lb">Km</label>
+                  <input className="fi" type="number" min="0" value={en.km||""} onChange={e=>updEnt(i,"km",e.target.value)} placeholder="0"/>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:10,marginTop:8,flexWrap:"wrap"}}>
+                {[["dieta","Dieta"],["mediaDieta","1/2 Dieta"],["canasto","Canasto"]].map(([f,l])=>(
+                  <label key={f} style={{display:"flex",alignItems:"center",gap:6,fontSize:13,cursor:"pointer",background:"#f8fafc",padding:"5px 10px",borderRadius:8,border:"1px solid #e2e8f0"}}>
+                    <input type="checkbox" style={{width:16,height:16,accentColor:"#1a3a5c"}} checked={!!en[f]} onChange={e=>updEnt(i,f,e.target.checked)}/>{l}
+                  </label>
+                ))}
+              </div>
+              {en.horaEntrada&&en.horaSalida&&(
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+                  <span className="bg2" style={{background:"#dcfce7",color:"#15803d"}}>{en.horasOrdinarias||0}h ord</span>
+                  {(en.horasExtra||0)>0&&<span className="bg2" style={{background:"#ffedd5",color:"#c2410c"}}>{en.horasExtra}h ext</span>}
+                  {(en.horasNocturnas||0)>0&&<span className="bg2" style={{background:"#ede9fe",color:"#6d28d9"}}>{en.horasNocturnas}h noc</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {err&&<p className="er">{err}</p>}
+        <div style={{display:"flex",gap:10,marginTop:12}}>
+          <button className="bs" style={{flex:1,padding:12}} onClick={onClose}>Cancelar</button>
+          <button className="bp" style={{flex:2,padding:12}} onClick={confirmar} disabled={!sel}>
+            Anadir al parte
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* \u2500\u2500 CAPATAZ APP \u2500\u2500 */
+function Capataz({sess,obras,partes,sP,page,setPage,logout,users,sU}){
+  const lks=[
+    {id:"nuevo",    label:"Nuevo",     i:"M12 5v14M5 12h14"},
+    {id:"mispartes",label:"Mis Partes",i:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"},
+    {id:"cuenta",   label:"Mi Cuenta", i:"M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"},
+  ];
+  const myP=(partes||[]).filter(p=>p.worker===sess.username);
+  return(
+    <Layout sess={sess} page={page} setPage={setPage} logout={logout} links={lks} isMgr={false}>
+      {page==="nuevo"    &&<NuevoParte sess={sess} obras={obras} partes={partes} sP={sP}/>}
+      {page==="mispartes"&&<MisPartesCapataz partes={myP} obras={obras} sP={sP} allP={partes} users={users}/>}
+      {page==="cuenta"   &&<MiCuenta sess={sess} users={users} sU={sU}/>}
+    </Layout>
+  );
+}
+
+/* \u2500\u2500 MIS PARTES CAPATAZ (con boton anadir trabajador) \u2500\u2500 */
+function MisPartesCapataz({partes,obras,sP,allP,users}){
+  const [modalParte, setModalParte] = useState(null);
+  const sorted=[...partes].sort((a,b)=>b.date.localeCompare(a.date));
+  const hO=partes.reduce((s,p)=>s+(p.entries||[]).reduce((ss,e)=>ss+(e.horasOrdinarias||0),0),0);
+  const hE=partes.reduce((s,p)=>s+(p.entries||[]).reduce((ss,e)=>ss+(e.horasExtra||0),0),0);
+
+  const onAdd=(nuevoParte)=>{
+    sP([...(allP||[]), nuevoParte]);
+  };
+
+  return(
+    <div className="pw" style={{padding:"24px 20px",maxWidth:700}}>
+      <h2 className="pt">Mis Partes</h2>
+      <div style={{background:"#fef3c7",borderRadius:12,padding:"12px 16px",marginBottom:16,fontSize:13,color:"#92400e",fontWeight:600,display:"flex",alignItems:"center",gap:8}}>
+        <Ic d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" s={16} c="#92400e"/>
+        Eres encargado \u2014 puedes anadir trabajadores a tus partes
+      </div>
+      <div className="sg" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+        {[["H.Ord.",hO.toFixed(1),"#1a3a5c"],["H.Extra",hE.toFixed(1),"#c2410c"],["Partes",partes.length,"#6b21a8"]].map(([l,v,c])=>(
+          <div key={l} style={{background:"#fff",borderRadius:12,padding:"12px 8px",textAlign:"center",boxShadow:"0 1px 4px rgba(0,0,0,.07)"}}>
+            <div style={{fontSize:20,fontWeight:900,color:c,lineHeight:1}}>{v}</div>
+            <div style={{fontSize:10,color:"#6b7280",fontWeight:700,marginTop:4}}>{l}</div>
+          </div>
+        ))}
+      </div>
+      {sorted.length===0&&<div className="cd"><p className="em">No tienes partes aun</p></div>}
+      {sorted.map(p=>(
+        <div key={p.id} className="cd">
+          <ParteCard p={p} obras={obras} users={users}
+            onDelete={id=>sP((allP||[]).filter(x=>x.id!==id))}
+            onCopy={fechas=>{const n=fechas.map(f=>({...p,date:f,id:Date.now()+Math.random()}));sP([...(allP||[]),...n]);}}/>
+          {/* Boton anadir trabajador */}
+          <button
+            onClick={()=>setModalParte(p)}
+            style={{width:"100%",marginTop:8,padding:"10px",borderRadius:9,border:"1.5px dashed #1a3a5c",background:"#f0f9ff",color:"#1a3a5c",fontWeight:700,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            <Ic d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" s={16} c="#1a3a5c"/>
+            Anadir trabajador a este parte
+          </button>
+        </div>
+      ))}
+      {modalParte&&(
+        <ModalAnadirTrabajador
+          parte={modalParte}
+          users={users}
+          obras={obras}
+          onClose={()=>setModalParte(null)}
+          onAdd={onAdd}
+        />
+      )}
     </div>
   );
 }
