@@ -73,6 +73,33 @@ const ls={
   g:(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}},
   s:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
 };
+
+// \u2500\u2500 Firebase config \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+const FB_URL = "https://gestionobra-fa19c-default-rtdb.europe-west1.firebasedatabase.app";
+
+const fb = {
+  async get(key){
+    try{
+      const r = await fetch(FB_URL+"/"+key+".json");
+      if(!r.ok) return null;
+      return await r.json();
+    }catch{ return null; }
+  },
+  async set(key, val){
+    try{
+      await fetch(FB_URL+"/"+key+".json",{
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(val)
+      });
+      // Cache locally too
+      ls.s(key, val);
+    }catch{
+      // Fallback to localStorage only
+      ls.s(key, val);
+    }
+  }
+};
 const IM={username:"admin",password:"1234",role:"manager",name:"Administrador"};
 const IW=[
   {username:"icabrera",password:"1234",role:"worker",name:"Isidro Cabrera Arag\u00f3n"},
@@ -133,14 +160,59 @@ const fmt=d=>{if(!d)return"";const[y,m,dd]=d.split("-");return dd+"/"+m+"/"+y;};
 const Ic=({d,s=18,c="currentColor"})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>;
 
 function App(){
-  const [users,setUR]=useState(()=>ls.g("u",[IM,...IW]));
-  const [obras,setOR]=useState(()=>ls.g("o",IO));
-  const [partes,setPR]=useState(()=>ls.g("p",[]));
-  const [sess,setSess]=useState(null);
-  const [page,setPage]=useState("login");
-  const sU=useCallback(v=>{setUR(v);ls.s("u",v);},[]);
-  const sO=useCallback(v=>{setOR(v);ls.s("o",v);},[]);
-  const sP=useCallback(v=>{setPR(v);ls.s("p",v);},[]);
+  const [users,  setUR]    = useState(null);
+  const [obras,  setOR]    = useState(null);
+  const [partes, setPR]    = useState(null);
+  const [sess,   setSess]  = useState(null);
+  const [page,   setPage]  = useState("login");
+  const [loading,setLoading] = useState(true);
+  const [syncing,setSyncing] = useState(false);
+  const [syncMsg,setSyncMsg] = useState("");
+
+  // Load data from Firebase on startup
+  useEffect(()=>{
+    (async()=>{
+      setLoading(true);
+      try{
+        const [u,o,p] = await Promise.all([
+          fb.get("users"), fb.get("obras"), fb.get("partes")
+        ]);
+        // If Firebase empty, use localStorage or defaults
+        const fu = (Array.isArray(u)&&u.length) ? u : ls.g("u",[IM,...IW]);
+        const fo = (Array.isArray(o)&&o.length) ? o : ls.g("o",IO);
+        const fp = (Array.isArray(p))            ? p : ls.g("p",[]);
+        setUR(fu); setOR(fo); setPR(fp);
+        // Save defaults to Firebase if empty
+        if(!Array.isArray(u)||!u.length) await fb.set("users", fu);
+        if(!Array.isArray(o)||!o.length) await fb.set("obras", fo);
+        if(!Array.isArray(p))            await fb.set("partes", fp);
+      }catch(e){
+        console.warn("Firebase error, using local data:", e);
+        setUR(ls.g("u",[IM,...IW]));
+        setOR(ls.g("o",IO));
+        setPR(ls.g("p",[]));
+      }
+      setLoading(false);
+    })();
+  },[]);
+
+  const sU=useCallback(async v=>{setUR(v);await fb.set("users",v);},[]);
+  const sO=useCallback(async v=>{setOR(v);await fb.set("obras",v);},[]);
+  const sP=useCallback(async v=>{setPR(v);await fb.set("partes",v);},[]);
+
+  const sync=useCallback(async()=>{
+    setSyncing(true);
+    try{
+      const [u,o,p]=await Promise.all([fb.get("users"),fb.get("obras"),fb.get("partes")]);
+      if(Array.isArray(u)&&u.length){setUR(u);ls.s("u",u);}
+      if(Array.isArray(o)&&o.length){setOR(o);ls.s("o",o);}
+      if(Array.isArray(p)){setPR(p);ls.s("p",p);}
+      setSyncMsg("Sincronizado");
+    }catch{ setSyncMsg("Error de conexion"); }
+    setSyncing(false);
+    setTimeout(()=>setSyncMsg(""),3000);
+  },[]);
+
   const login=(u,p)=>{
     const usr=(users||[]).find(x=>x.username===u&&x.password===p);
     if(!usr)return false;
@@ -148,8 +220,17 @@ function App(){
     return true;
   };
   const logout=()=>{setSess(null);setPage("login");};
+
+  if(loading) return(
+    <div style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"linear-gradient(150deg,#0f2340,#1a3a5c)",gap:20}}>
+      <img src={LOGO} style={{height:80,objectFit:"contain"}}/>
+      <div style={{color:"#fff",fontWeight:700,fontSize:16}}>Cargando datos...</div>
+      <div style={{width:40,height:40,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#f0a500",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
+    </div>
+  );
+
   if(!sess)return <Login onLogin={login}/>;
-  if(sess.role==="manager")return <Admin sess={sess} obras={obras} sO={sO} partes={partes} sP={sP} page={page} setPage={setPage} logout={logout} users={users} sU={sU}/>;
+  if(sess.role==="manager")return <Admin sess={sess} obras={obras} sO={sO} partes={partes} sP={sP} page={page} setPage={setPage} logout={logout} users={users} sU={sU} sync={sync} syncMsg={syncMsg} syncing={syncing}/>;
   return <Worker sess={sess} obras={obras} partes={partes} sP={sP} page={page} setPage={setPage} logout={logout} users={users} sU={sU}/>;
 }
 
@@ -207,7 +288,7 @@ function Layout({sess,page,setPage,logout,links,isMgr,children}){
   );
 }
 
-function Admin({sess,obras,sO,partes,sP,page,setPage,logout,users,sU}){
+function Admin({sess,obras,sO,partes,sP,page,setPage,logout,users,sU,sync,syncMsg,syncing}){
   const lks=[
     {id:"dash",   label:"Inicio",  i:"M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"},
     {id:"obras",  label:"Obras",   i:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"},
@@ -217,7 +298,7 @@ function Admin({sess,obras,sO,partes,sP,page,setPage,logout,users,sU}){
   ];
   return(
     <Layout sess={sess} page={page} setPage={setPage} logout={logout} links={lks} isMgr={true}>
-      {page==="dash"   &&<Dash   partes={partes} obras={obras} users={users}/>}
+      {page==="dash"   &&<Dash   partes={partes} obras={obras} users={users} sync={sync} syncMsg={syncMsg} syncing={syncing}/>}
       {page==="obras"  &&<Obras  obras={obras} sO={sO}/>}
       {page==="partes" &&<TodosPartes partes={partes} obras={obras} users={users} sP={sP}/>}
       {page==="equipo" &&<Equipo users={users} sU={sU}/>}
@@ -242,7 +323,7 @@ function Worker({sess,obras,partes,sP,page,setPage,logout,users,sU}){
   );
 }
 
-function Dash({partes,obras,users}){
+function Dash({partes,obras,users,sync,syncMsg,syncing}){
   const allE=(partes||[]).flatMap(p=>p.entries||[]);
   const totHO=allE.reduce((s,e)=>s+(e.horasOrdinarias||0),0);
   const totHE=allE.reduce((s,e)=>s+(e.horasExtra||0),0);
@@ -250,7 +331,16 @@ function Dash({partes,obras,users}){
   const rc=[...(partes||[])].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
   return(
     <div className="pw" style={{padding:"24px 20px"}}>
-      <h2 className="pt">Panel de Resumen</h2>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18,flexWrap:"wrap",gap:10}}>
+        <h2 style={{fontSize:20,fontWeight:800,color:"#1e293b"}}>Panel de Resumen</h2>
+        {sync&&<button onClick={sync} disabled={syncing}
+          style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:9,border:"1.5px solid #e2e8f0",background:"#fff",color:syncMsg?"#16a34a":"#374151",cursor:"pointer",fontSize:13,fontWeight:600}}>
+          {syncing
+            ?<><span style={{display:"inline-block",width:14,height:14,border:"2px solid #e2e8f0",borderTopColor:"#374151",borderRadius:"50%",animation:"spin .7s linear infinite",marginRight:6}}/>Actualizando...</>
+            :<><Ic d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" s={14}/>{syncMsg||"Actualizar"}</>
+          }
+        </button>}
+      </div>
       <div className="sg" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:18}}>
         {[["H.Ordinarias",totHO.toFixed(1)+"h","#1a3a5c"],["H.Extra",totHE.toFixed(1)+"h","#c2410c"],["Km",totKm.toFixed(0),"#065f46"],["Partes",(partes||[]).length,"#6b21a8"]].map(([l,v,c])=>(
           <div key={l} className="cd" style={{borderTop:"4px solid "+c,marginBottom:0,textAlign:"center",padding:"14px 8px"}}>
