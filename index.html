@@ -610,6 +610,7 @@ function NuevoParte({sess,obras,partes,sP}){
 
 function ParteCard({p,obras,users,onDelete,onCopy}){
   const [copyM,setCopyM]=useState(false);
+  const [pdfM,setPdfM]=useState(false);
   const w=(users||[]).find(u=>u.username===p.worker);
   const hO=(p.entries||[]).reduce((s,e)=>s+(e.horasOrdinarias||0),0);
   const hE=(p.entries||[]).reduce((s,e)=>s+(e.horasExtra||0),0);
@@ -625,6 +626,9 @@ function ParteCard({p,obras,users,onDelete,onCopy}){
           <span className="bg2" style={{background:"#dbeafe",color:"#1e40af"}}>{hO.toFixed(1)}h ord</span>
           {hE>0&&<span className="bg2" style={{background:"#ffedd5",color:"#c2410c"}}>{hE.toFixed(1)}h ext</span>}
           {hN>0&&<span className="bg2" style={{background:"#ede9fe",color:"#6d28d9"}}>{hN.toFixed(1)}h noc</span>}
+          <button style={{display:"flex",alignItems:"center",gap:4,padding:"7px 11px",borderRadius:8,border:"none",background:"#dcfce7",color:"#15803d",fontWeight:700,cursor:"pointer",fontSize:12}} onClick={()=>setPdfM(true)}>
+            <Ic d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" s={13} c="#15803d"/>PDF
+          </button>
           {onCopy&&<button className="bv" onClick={()=>setCopyM(true)}>Copiar</button>}
           {onDelete&&<button className="bd" onClick={()=>{if(confirm("Eliminar?"))onDelete(p.id);}}>X</button>}
         </div>
@@ -648,6 +652,7 @@ function ParteCard({p,obras,users,onDelete,onCopy}){
       })}
       {p.observaciones&&<div style={{marginTop:8,padding:"7px 10px",background:"#f8fafc",borderRadius:8,fontSize:12,color:"#6b7280"}}><b>Obs:</b> {p.observaciones}</div>}
       {copyM&&<CopyModal parte={p} onClose={()=>setCopyM(false)} onCopy={onCopy}/>}
+      {pdfM&&<ModalFirmas parte={p} obras={obras} users={users} onClose={()=>setPdfM(false)}/>}
     </div>
   );
 }
@@ -1221,6 +1226,235 @@ function MisPartesCapataz({partes,obras,sP,allP,users}){
           onAdd={onAdd}
         />
       )}
+    </div>
+  );
+}
+
+
+/* \u2500\u2500 SIGNATURE PAD \u2500\u2500 */
+function SignaturePad({label,onSign,signed}){
+  const canvasRef=useRef(null);
+  const drawing=useRef(false);
+  const lastPos=useRef({x:0,y:0});
+  const getPos=(e,canvas)=>{
+    const rect=canvas.getBoundingClientRect();
+    const src=e.touches?e.touches[0]:e;
+    return{x:(src.clientX-rect.left)*(canvas.width/rect.width),y:(src.clientY-rect.top)*(canvas.height/rect.height)};
+  };
+  const startDraw=e=>{e.preventDefault();drawing.current=true;lastPos.current=getPos(e,canvasRef.current);};
+  const draw=e=>{
+    e.preventDefault();if(!drawing.current)return;
+    const canvas=canvasRef.current,ctx=canvas.getContext("2d"),pos=getPos(e,canvas);
+    ctx.strokeStyle="#1a3a5c";ctx.lineWidth=2.5;ctx.lineCap="round";ctx.lineJoin="round";
+    ctx.beginPath();ctx.moveTo(lastPos.current.x,lastPos.current.y);ctx.lineTo(pos.x,pos.y);ctx.stroke();
+    lastPos.current=pos;
+  };
+  const endDraw=()=>{if(!drawing.current)return;drawing.current=false;onSign(canvasRef.current.toDataURL("image/png"));};
+  const clear=()=>{canvasRef.current.getContext("2d").clearRect(0,0,500,150);onSign(null);};
+  return(
+    <div>
+      <div className="sw">
+        <canvas ref={canvasRef} width={500} height={150} style={{width:"100%",height:150}}
+          onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+          onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
+        <span style={{fontSize:11,color:"#94a3b8"}}>{label}</span>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {signed&&<span style={{fontSize:11,color:"#16a34a",fontWeight:700}}>\u2713 Firmado</span>}
+          <button className="bd" style={{padding:"4px 10px",fontSize:11}} onClick={clear}>Borrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* \u2500\u2500 GENERAR PDF \u2500\u2500 */
+function generarPDF(parte, obras, users, sigTrabajador, sigCliente, datosCliente){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const W=210,mg=14;
+  let y=mg;
+
+  // Logo
+  try{ doc.addImage(LOGO_B64,"PNG",mg,y,38,16,undefined,"FAST"); }catch(e){}
+
+  // Empresa (derecha)
+  doc.setFontSize(8);doc.setTextColor(100);
+  doc.text("PIMASA",W-mg,y+4,{align:"right"});
+  doc.text("Instalaciones Electricas",W-mg,y+8,{align:"right"});
+
+  // Linea
+  y+=20;doc.setDrawColor(26,58,92);doc.setLineWidth(0.8);doc.line(mg,y,W-mg,y);y+=6;
+
+  // Titulo
+  doc.setFontSize(15);doc.setTextColor(26,58,92);doc.setFont(undefined,"bold");
+  doc.text("PARTE DE TRABAJO",W/2,y,{align:"center"});y+=7;
+
+  // Numero y fecha
+  doc.setFontSize(9);doc.setTextColor(80);doc.setFont(undefined,"normal");
+  const worker=(users||[]).find(u=>u.username===parte.worker);
+  doc.text("N\u00ba: PT-"+String(parte.id).slice(-6),mg,y);
+  doc.text("Fecha: "+fmt(parte.date),W-mg,y,{align:"right"});y+=9;
+
+  // Bloques trabajador / cliente
+  const col2=W/2+2,bH=26;
+  doc.setFillColor(240,245,255);doc.setDrawColor(200,210,230);
+  doc.roundedRect(mg,y,(W-mg*2)/2-2,bH,2,2,"FD");
+  doc.setFontSize(8);doc.setTextColor(26,58,92);doc.setFont(undefined,"bold");
+  doc.text("TRABAJADOR",mg+3,y+6);
+  doc.setFont(undefined,"normal");doc.setTextColor(50);
+  doc.text(worker?worker.name:parte.worker,mg+3,y+13);
+
+  doc.setFillColor(255,252,235);doc.setDrawColor(230,210,150);
+  doc.roundedRect(col2,y,(W-mg*2)/2-2,bH,2,2,"FD");
+  doc.setFontSize(8);doc.setTextColor(130,80,0);doc.setFont(undefined,"bold");
+  doc.text("CLIENTE / OBRA",col2+3,y+6);
+  doc.setFont(undefined,"normal");doc.setTextColor(50);
+  doc.text(datosCliente.nombre||"\u2014",col2+3,y+13);
+  if(datosCliente.direccion)doc.text(datosCliente.direccion,col2+3,y+18);
+  if(datosCliente.telefono)doc.text("Tel: "+datosCliente.telefono,col2+3,y+23);
+  y+=bH+7;
+
+  // Tabla trabajos
+  doc.setFontSize(9);doc.setTextColor(26,58,92);doc.setFont(undefined,"bold");
+  doc.text("DETALLE DE TRABAJOS",mg,y);y+=4;
+
+  // Cabecera tabla
+  const cols=[46,18,16,16,16,14,14,14,14];
+  const heads=["Codigo de Obra","Horario","H.Ord.","H.Extra","H.Noc.","Km","Dieta","1/2D","Canasto"];
+  let cx=mg;const cX=[];cols.forEach(c=>{cX.push(cx);cx+=c;});
+  doc.setFillColor(26,58,92);doc.setTextColor(255);
+  doc.rect(mg,y,W-mg*2,7,"F");
+  doc.setFontSize(7);doc.setFont(undefined,"bold");
+  heads.forEach((h,i)=>doc.text(h,cX[i]+1,y+5));y+=7;
+
+  let totHO=0,totHE=0,totHN=0,totKm=0,totD=0,totMD=0,totC=0;
+  doc.setTextColor(30);doc.setFont(undefined,"normal");doc.setFontSize(7.5);
+  (parte.entries||[]).forEach((e,i)=>{
+    const ob=(obras||[]).find(o=>o.code===e.obra);
+    if(i%2===0){doc.setFillColor(248,250,252);doc.rect(mg,y,W-mg*2,7,"F");}
+    const hor=(e.horaEntrada&&e.horaSalida)?e.horaEntrada+"-"+e.horaSalida:"-";
+    doc.text((ob?e.obra+" - "+ob.name:e.obra).substring(0,30),cX[0]+1,y+5);
+    doc.text(hor,cX[1]+1,y+5);
+    doc.text(String(e.horasOrdinarias||0),cX[2]+1,y+5);
+    doc.text(String(e.horasExtra||0),cX[3]+1,y+5);
+    doc.text(String(e.horasNocturnas||0),cX[4]+1,y+5);
+    doc.text(String(parseFloat(e.km)||0),cX[5]+1,y+5);
+    doc.text(e.dieta?"Si":"No",cX[6]+1,y+5);
+    doc.text(e.mediaDieta?"Si":"No",cX[7]+1,y+5);
+    doc.text(e.canasto?"Si":"No",cX[8]+1,y+5);
+    totHO+=e.horasOrdinarias||0;totHE+=e.horasExtra||0;totHN+=e.horasNocturnas||0;
+    totKm+=parseFloat(e.km)||0;
+    if(e.dieta)totD++;if(e.mediaDieta)totMD++;if(e.canasto)totC++;
+    y+=7;doc.setDrawColor(230);doc.line(mg,y,W-mg,y);
+  });
+
+  // Totales
+  doc.setFillColor(26,58,92);doc.setTextColor(255);doc.setFont(undefined,"bold");
+  doc.rect(mg,y,W-mg*2,7,"F");
+  doc.text("TOTALES",cX[0]+1,y+5);doc.text("-",cX[1]+1,y+5);
+  doc.text(String(totHO),cX[2]+1,y+5);doc.text(String(totHE),cX[3]+1,y+5);
+  doc.text(String(totHN.toFixed(1)),cX[4]+1,y+5);doc.text(String(totKm.toFixed(0)),cX[5]+1,y+5);
+  doc.text(String(totD),cX[6]+1,y+5);doc.text(String(totMD),cX[7]+1,y+5);doc.text(String(totC),cX[8]+1,y+5);
+  y+=12;
+
+  // Observaciones
+  if(parte.observaciones){
+    doc.setTextColor(26,58,92);doc.setFont(undefined,"bold");doc.setFontSize(9);
+    doc.text("OBSERVACIONES:",mg,y);y+=5;
+    doc.setTextColor(60);doc.setFont(undefined,"normal");doc.setFontSize(8);
+    const lines=doc.splitTextToSize(parte.observaciones,W-mg*2);
+    doc.text(lines,mg,y);y+=lines.length*4+6;
+  }
+
+  // Firmas
+  if(y>210){doc.addPage();y=mg;}
+  y+=4;doc.setDrawColor(26,58,92);doc.setLineWidth(0.4);doc.line(mg,y,W-mg,y);y+=5;
+  doc.setFontSize(10);doc.setTextColor(26,58,92);doc.setFont(undefined,"bold");
+  doc.text("FIRMAS",W/2,y,{align:"center"});y+=7;
+
+  const sigW=(W-mg*2)/2-5,sigH=36,sig2x=mg+sigW+10;
+
+  // Firma trabajador
+  doc.setDrawColor(180);doc.setLineWidth(0.3);doc.roundedRect(mg,y,sigW,sigH,2,2);
+  doc.setFontSize(7.5);doc.setTextColor(26,58,92);doc.setFont(undefined,"bold");
+  doc.text("FIRMA DEL TRABAJADOR",mg+sigW/2,y+5,{align:"center"});
+  if(sigTrabajador){try{doc.addImage(sigTrabajador,"PNG",mg+4,y+7,sigW-8,sigH-12,undefined,"FAST");}catch(e){}}
+  doc.setFont(undefined,"normal");doc.setFontSize(7);doc.setTextColor(100);
+  doc.text(worker?worker.name:parte.worker,mg+sigW/2,y+sigH-3,{align:"center"});
+
+  // Firma cliente
+  doc.roundedRect(sig2x,y,sigW,sigH,2,2);
+  doc.setFontSize(7.5);doc.setTextColor(130,80,0);doc.setFont(undefined,"bold");
+  doc.text("FIRMA DEL CLIENTE",sig2x+sigW/2,y+5,{align:"center"});
+  if(sigCliente){try{doc.addImage(sigCliente,"PNG",sig2x+4,y+7,sigW-8,sigH-12,undefined,"FAST");}catch(e){}}
+  doc.setFont(undefined,"normal");doc.setFontSize(7);doc.setTextColor(100);
+  doc.text(datosCliente.nombre||"Cliente",sig2x+sigW/2,y+sigH-3,{align:"center"});
+  y+=sigH+7;
+
+  // Pie
+  doc.setDrawColor(26,58,92);doc.setLineWidth(0.4);doc.line(mg,y,W-mg,y);y+=4;
+  doc.setFontSize(7);doc.setTextColor(120);doc.setFont(undefined,"normal");
+  doc.text("Documento generado electronicamente - GestionObras Pro",W/2,y,{align:"center"});
+
+  doc.save("parte_"+String(parte.id).slice(-6)+"_"+parte.date+".pdf");
+}
+
+/* \u2500\u2500 MODAL FIRMAS PDF \u2500\u2500 */
+function ModalFirmas({parte, obras, users, onClose}){
+  const [sigT,setSigT]=useState(null);
+  const [sigC,setSigC]=useState(null);
+  const [cliente,setCliente]=useState({nombre:"",direccion:"",telefono:""});
+  const [step,setStep]=useState(1);
+
+  return(
+    <div className="mb" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="md">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <h2 style={{fontSize:16,fontWeight:800,color:"#1a3a5c"}}>
+            {step===1?"Datos del cliente":"Firmas del parte"}
+          </h2>
+          <button onClick={onClose} style={{border:"none",background:"#f1f5f9",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16}}>X</button>
+        </div>
+        <div style={{display:"flex",gap:6,marginBottom:18}}>
+          {[1,2].map(s=><div key={s} style={{flex:1,height:4,borderRadius:4,background:step>=s?"#1a3a5c":"#e2e8f0"}}/>)}
+        </div>
+
+        {step===1&&(
+          <div>
+            <p style={{fontSize:13,color:"#6b7280",marginBottom:16}}>Datos del cliente para el parte (opcional)</p>
+            <div className="fg"><label className="lb">Nombre del cliente</label><input className="fi" value={cliente.nombre} onChange={e=>setCliente({...cliente,nombre:e.target.value})} placeholder="Nombre del cliente o empresa"/></div>
+            <div className="fg"><label className="lb">Direccion de la obra</label><input className="fi" value={cliente.direccion} onChange={e=>setCliente({...cliente,direccion:e.target.value})} placeholder="Calle, numero, ciudad"/></div>
+            <div className="fg"><label className="lb">Telefono</label><input className="fi" type="tel" value={cliente.telefono} onChange={e=>setCliente({...cliente,telefono:e.target.value})} placeholder="000 000 000"/></div>
+            <button className="bp" style={{width:"100%",padding:13,marginTop:4}} onClick={()=>setStep(2)}>
+              Siguiente: Firmas \u2192
+            </button>
+          </div>
+        )}
+
+        {step===2&&(
+          <div>
+            <p style={{fontSize:13,color:"#6b7280",marginBottom:16}}>Firma con el dedo en cada recuadro.</p>
+            <div style={{marginBottom:18}}>
+              <label className="lb" style={{marginBottom:8,display:"block"}}>Firma del trabajador</label>
+              <SignaturePad label="Firme aqui el trabajador" onSign={setSigT} signed={!!sigT}/>
+            </div>
+            <div style={{marginBottom:18}}>
+              <label className="lb" style={{marginBottom:8,display:"block"}}>Firma del cliente</label>
+              <SignaturePad label="Firme aqui el cliente" onSign={setSigC} signed={!!sigC}/>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button className="bs" style={{flex:1,padding:12}} onClick={()=>setStep(1)}> \u2190 Volver</button>
+              <button className="bp" style={{flex:2,padding:12,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+                onClick={()=>generarPDF(parte,obras,users,sigT,sigC,cliente)}>
+                <Ic d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" s={16} c="#fff"/>
+                Generar y descargar PDF
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
