@@ -173,7 +173,7 @@ function App(){
     <div style=${{width:40,height:40,border:"3px solid rgba(255,255,255,.2)",borderTopColor:"#f0a500",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
   </div>`;
   if(!sess)return html2`<${Login} onLogin=${login}/>`;
-  if(sess.role==="manager")return html2`<${Admin} sess=${sess} obras=${obras} sO=${sO} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU}/>`;
+  if(sess.role==="manager")return html2`<${Admin} sess=${sess} obras=${obras} sO=${sO} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU} vehiculos=${vehiculos} sV=${sV}/>`;
   if(sess.role==="capataz")return html2`<${Capataz} sess=${sess} obras=${obras} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU}/>`;
   return html2`<${Worker} sess=${sess} obras=${obras} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU}/>`;
 }
