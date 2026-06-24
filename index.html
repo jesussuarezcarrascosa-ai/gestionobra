@@ -123,16 +123,21 @@ function App(){
         const fu=(Array.isArray(u)&&u.length)?u:ls.g("users",[IM,...IW]);
         const fo=(Array.isArray(o)&&o.length)?o:ls.g("obras",IO);
         const fp=Array.isArray(p)?p:ls.g("partes",[]);
-        const fv=Array.isArray(v)?v:ls.g("vehiculos",[]);
+        // vehiculos: handle null, 0, {_empty:true} or array
+        let fv=[];
+        if(Array.isArray(v))fv=v;
+        else if(v&&typeof v==="object"&&!v._empty)fv=Object.values(v);
+        else fv=ls.g("vehiculos",[]);
         setUR(fu);setOR(fo);setPR(fp);setVR(fv);
         if(!Array.isArray(u)||!u.length)fb.set("users",fu);
         if(!Array.isArray(o)||!o.length)fb.set("obras",fo);
         if(!Array.isArray(p))fb.set("partes",fp);
-        if(!Array.isArray(v))fb.set("vehiculos",[]);
       }catch(e){
         setUR(ls.g("users",[IM,...IW]));
         setOR(ls.g("obras",IO));
         setPR(ls.g("partes",[]));
+        setVR(ls.g("vehiculos",[]));
+        console.warn("Firebase load error:",e);
       }
       setLoading(false);
     })();
@@ -140,7 +145,17 @@ function App(){
   const sU=useCallback(async v=>{setUR(v);await fb.set("users",v);},[]);
   const sO=useCallback(async v=>{setOR(v);await fb.set("obras",v);},[]);
   const sP=useCallback(async v=>{setPR(v);await fb.set("partes",v);},[]);
-  const sV=useCallback(async v=>{setVR(v);await fb.set("vehiculos",v);},[]);
+  const sV=useCallback(async v=>{
+    setVR(v);
+    ls.s("vehiculos",v);
+    try{
+      await fetch(FB_URL+"/vehiculos.json",{
+        method:"PUT",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(v.length?v:{"_empty":true})
+      });
+    }catch(e){console.warn("vehiculos save error",e);}
+  },[]);
   const login=(u,p)=>{
     const usr=(users||[]).find(x=>x.username===u&&x.password===p);
     if(!usr)return false;
@@ -420,8 +435,10 @@ function Vehiculos({vehiculos,sV}){
   const add=()=>{
     const m=mat.trim().toUpperCase().replace(/ /g,"");
     if(!m){setE("Introduce la matricula");return;}
-    if((vehiculos||[]).find(v=>v.matricula===m)){setE("Esa matricula ya existe");return;}
-    sV([...(vehiculos||[]),{matricula:m,descripcion:desc.trim(),activo:true}]);
+    const lista=Array.isArray(vehiculos)?vehiculos:[];
+    if(lista.find(v=>v.matricula===m)){setE("Esa matricula ya existe");return;}
+    const nueva=[...lista,{matricula:m,descripcion:desc.trim(),activo:true}];
+    sV(nueva);
     setMat("");setDesc("");setE("");setOk("Vehiculo anadido");setTimeout(()=>setOk(""),3000);
   };
   return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:700}}>
