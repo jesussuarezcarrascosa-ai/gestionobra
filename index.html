@@ -148,13 +148,17 @@ function App(){
   const sV=useCallback(async v=>{
     setVR(v);
     ls.s("vehiculos",v);
-    try{
-      await fetch(FB_URL+"/vehiculos.json",{
-        method:"PUT",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(v.length?v:{"_empty":true})
-      });
-    }catch(e){console.warn("vehiculos save error",e);}
+    const payload=v&&v.length?v:{"_empty":true};
+    const r=await fetch(FB_URL+"/vehiculos.json",{
+      method:"PUT",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(payload)
+    });
+    if(!r.ok){
+      const txt=await r.text();
+      throw new Error("Firebase error "+r.status+": "+txt);
+    }
+    return true;
   },[]);
   const login=(u,p)=>{
     const usr=(users||[]).find(x=>x.username===u&&x.password===p);
@@ -433,13 +437,20 @@ function Vehiculos({vehiculos,sV}){
   const [err,setE]=useState("");
   const [ok,setOk]=useState("");
   const add=()=>{
-    const m=mat.trim().toUpperCase().replace(/ /g,"");
-    if(!m){setE("Introduce la matricula");return;}
-    const lista=Array.isArray(vehiculos)?vehiculos:[];
-    if(lista.find(v=>v.matricula===m)){setE("Esa matricula ya existe");return;}
-    const nueva=[...lista,{matricula:m,descripcion:desc.trim(),activo:true}];
-    sV(nueva);
-    setMat("");setDesc("");setE("");setOk("Vehiculo anadido");setTimeout(()=>setOk(""),3000);
+    try{
+      const m=mat.trim().toUpperCase().replace(/ /g,"");
+      if(!m){setE("Introduce la matricula");return;}
+      const lista=Array.isArray(vehiculos)?vehiculos:[];
+      if(lista.find(v=>v.matricula===m)){setE("Esa matricula ya existe");return;}
+      const nueva=[...lista,{matricula:m,descripcion:desc.trim(),activo:true}];
+      sV(nueva).then(()=>{
+        setMat("");setDesc("");setE("");setOk("Vehiculo anadido");setTimeout(()=>setOk(""),3000);
+      }).catch(err=>{
+        setE("Error al guardar: "+err.message);
+      });
+    }catch(err){
+      setE("Error: "+err.message);
+    }
   };
   return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:700}}>
     <h2 class="pt">Vehiculos</h2>
