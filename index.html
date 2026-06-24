@@ -258,7 +258,7 @@ function Worker({sess,obras,partes,sP,page,setPage,logout,users,sU,vehiculos}){
   ];
   const myP=(partes||[]).filter(p=>p.worker===sess.username);
   return html2`<${Layout} sess=${sess} page=${page} setPage=${setPage} logout=${logout} links=${lks} isMgr=${false}>
-    ${page==="nuevo"&&html2`<${NuevoParte} sess=${sess} obras=${obras} partes=${partes} sP=${sP} vehiculos=${vehiculos}/>`}
+    ${page==="nuevo"&&html2`<${NuevoParte} sess=${sess} obras=${obras} partes=${partes} sP=${sP} vehiculos=${vehiculos} users=${users} esCapataz=${true}/>`}
     ${page==="mispartes"&&html2`<${MisPartes} partes=${myP} obras=${obras} sP=${sP} allP=${partes} users=${users}/>`}
     ${page==="cuenta"&&html2`<${MiCuenta} sess=${sess} users=${users} sU=${sU}/>`}
   </${Layout}>`;
@@ -483,9 +483,13 @@ function Vehiculos({vehiculos,sV}){
 }
 
 
-function NuevoParte({sess,obras,partes,sP,vehiculos}){
+function NuevoParte({sess,obras,partes,sP,vehiculos,users,esCapataz}){
   const ao=(obras||[]).filter(o=>o.active);
   const av=(vehiculos||[]).filter(v=>v.activo);
+  const trabajadores=(users||[]).filter(u=>u.role==="worker"||u.role==="capataz");
+  // Si es capataz puede crear partes para otros sin incluirse
+  const [paraWorker,setParaWorker]=useState("propio"); // "propio" o username
+  const workerEfectivo=esCapataz&&paraWorker!=="propio"?paraWorker:sess.username;
   const [date,setDate]=useState(hoy);
   const [ents,setEnts]=useState([eVacio(obras)]);
   const primeraObra=ao[0];
@@ -511,14 +515,26 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
       if(!e.horaEntrada||!e.horaSalida){setErr("Introduce hora entrada y salida");return;}
       if(e.totalHoras<=0){setErr("Hora salida debe ser posterior a entrada");return;}
     }
-    sP([...(partes||[]),{date,worker:sess.username,entries:ents,vehiculo:vehiculo,id:Date.now()}]);
-    setOk(true);setEnts([eVacio(obras)]);setVehiculo("");
+    sP([...(partes||[]),{date,worker:workerEfectivo,entries:ents,vehiculo:vehiculo,id:Date.now(),creadoPorCapataz:esCapataz&&paraWorker!=="propio"?sess.username:undefined}]);
+    setOk(true);setEnts([eVacio(obras)]);setVehiculo("");setParaWorker("propio");
     setTimeout(()=>setOk(false),3000);
   };
   return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:700}}>
     <h2 class="pt">Nuevo Parte</h2>
     <div class="cd">
       <div class="fg"><label class="lb">Fecha</label><input class="fi" type="date" value=${date} onInput=${e=>setDate(e.target.value)} style=${{maxWidth:200}}/></div>
+      ${esCapataz&&html2`<div class="fg">
+        <label class="lb">Parte para</label>
+        <select class="fi" value=${paraWorker} onChange=${e=>setParaWorker(e.target.value)}>
+          <option value="propio">Para mi (${sess.name})</option>
+          <optgroup label="Otro trabajador">
+            ${trabajadores.filter(w=>w.username!==sess.username).map(w=>html2`<option key=${w.username} value=${w.username}>${w.name}</option>`)}
+          </optgroup>
+        </select>
+        ${paraWorker!=="propio"&&html2`<div style=${{marginTop:6,padding:"6px 10px",background:"#fef3c7",borderRadius:8,fontSize:12,color:"#92400e",fontWeight:600}}>
+          Creando parte para: ${(users||[]).find(u=>u.username===paraWorker)?.name||paraWorker}
+        </div>`}
+      </div>`}
       <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <span style=${{fontSize:14,fontWeight:700,color:"#374151"}}>Lineas de trabajo</span>
         <button class="bs" onClick=${()=>setEnts([...ents,eVacio(obras)])}>+ Obra</button>
@@ -576,7 +592,7 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
         </select>
       </div>
       ${err&&html2`<p class="er">${err}</p>`}
-      ${ok&&html2`<p class="ok">Parte guardado correctamente</p>`}
+      ${ok&&html2`<p class="ok">${esCapataz&&paraWorker!=="propio"?"Parte guardado para "+((users||[]).find(u=>u.username===paraWorker)||{}).name:"Parte guardado correctamente"}</p>`}
       <button class="bp" style=${{width:"100%",padding:14,fontSize:15,marginTop:8}} onClick=${sub}>Guardar parte</button>
     </div>
   </div>`;
@@ -691,6 +707,7 @@ function ParteCard({p,obras,users,onDelete,onCopy,onEdit}){
       <div style=${{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
         <span style=${{fontWeight:800,color:"#1e293b",fontSize:15}}>${fmt(p.date)}</span>
         ${w&&html2`<span style=${{fontWeight:600,color:"#374151",fontSize:13}}>${w.name}</span>`}
+        ${p.creadoPorCapataz&&html2`<span class="bg2" style=${{background:"#fef3c7",color:"#92400e",fontSize:10}}>Por encargado</span>`}
       </div>
       <div style=${{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
         <span class="bg2" style=${{background:"#dbeafe",color:"#1e40af"}}>${hO.toFixed(1)}h</span>
