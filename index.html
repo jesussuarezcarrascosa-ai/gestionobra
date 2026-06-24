@@ -102,7 +102,8 @@ function recalc(entries){
 }
 function eVacio(obras){
   const ao=(obras||[]).filter(o=>o.active);
-  return{obra:ao[0]?ao[0].code:"",horaEntrada:"",horaSalida:"",dieta:false,mediaDieta:false,canasto:false,km:"",horasOrdinarias:0,horasExtra:0,horasNocturnas:0,totalHoras:0};
+  const primera=ao[0]||null;
+  return{obra:primera?primera.code:"",horaEntrada:"",horaSalida:"",dieta:false,mediaDieta:false,canasto:false,km:"",horasOrdinarias:0,horasExtra:0,horasNocturnas:0,totalHoras:0,observaciones:primera?primera.name:"",materiales:[]};
 }
 </script>
 <script>
@@ -174,8 +175,8 @@ function App(){
   </div>`;
   if(!sess)return html2`<${Login} onLogin=${login}/>`;
   if(sess.role==="manager")return html2`<${Admin} sess=${sess} obras=${obras} sO=${sO} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU} vehiculos=${vehiculos} sV=${sV}/>`;
-  if(sess.role==="capataz")return html2`<${Capataz} sess=${sess} obras=${obras} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU}/>`;
-  return html2`<${Worker} sess=${sess} obras=${obras} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU}/>`;
+  if(sess.role==="capataz")return html2`<${Capataz} sess=${sess} obras=${obras} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU} vehiculos=${vehiculos}/>`;
+  return html2`<${Worker} sess=${sess} obras=${obras} partes=${partes} sP=${sP} page=${page} setPage=${setPage} logout=${logout} users=${users} sU=${sU} vehiculos=${vehiculos}/>`;
 }
 
 function Login({onLogin}){
@@ -488,7 +489,6 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
   const [date,setDate]=useState(hoy);
   const [ents,setEnts]=useState([eVacio(obras)]);
   const primeraObra=ao[0];
-  const [obs,setObs]=useState(primeraObra?primeraObra.name:"");
   const [vehiculo,setVehiculo]=useState("");
   const [ok,setOk]=useState(false);const [err,setErr]=useState("");
   const upd=(i,f,v)=>{
@@ -501,7 +501,7 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
     }
     if(f==="dieta"&&v)e[i].mediaDieta=false;
     if(f==="mediaDieta"&&v)e[i].dieta=false;
-    if(f==="obra"){const ob=(obras||[]).find(o=>o.code===v);if(ob)setObs(ob.name);}
+    if(f==="obra"){const ob=(obras||[]).find(o=>o.code===v);if(ob)e[i].observaciones=ob.name;}
     setEnts(e);
   };
   const sub=()=>{
@@ -511,8 +511,8 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
       if(!e.horaEntrada||!e.horaSalida){setErr("Introduce hora entrada y salida");return;}
       if(e.totalHoras<=0){setErr("Hora salida debe ser posterior a entrada");return;}
     }
-    sP([...(partes||[]),{date,worker:sess.username,entries:ents,observaciones:obs,vehiculo:vehiculo,id:Date.now()}]);
-    setOk(true);setEnts([eVacio(obras)]);setObs(primeraObra?primeraObra.name:"");setVehiculo("");
+    sP([...(partes||[]),{date,worker:sess.username,entries:ents,vehiculo:vehiculo,id:Date.now()}]);
+    setOk(true);setEnts([eVacio(obras)]);setVehiculo("");
     setTimeout(()=>setOk(false),3000);
   };
   return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:700}}>
@@ -550,6 +550,23 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
             ${en.horasExtra>0&&html2`<span class="bg2" style=${{background:"#ffedd5",color:"#c2410c"}}>${en.horasExtra}h ext</span>`}
             ${en.horasNocturnas>0&&html2`<span class="bg2" style=${{background:"#ede9fe",color:"#6d28d9"}}>${en.horasNocturnas}h noc</span>`}
           </div>`}
+        <div class="fg" style=${{marginTop:10,marginBottom:0}}>
+          <label class="lb">Observaciones</label>
+          <textarea class="fi" rows="2" value=${en.observaciones||""} onInput=${e=>upd(i,"observaciones",e.target.value)} placeholder="Trabajos realizados en esta obra..." style=${{resize:"vertical"}}></textarea>
+        </div>
+        <div style=${{marginTop:10}}>
+          <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <label class="lb" style=${{marginBottom:0}}>Materiales</label>
+            <button class="bs" style=${{padding:"4px 10px",fontSize:12}} onClick=${()=>upd(i,"materiales",[...(en.materiales||[]),{descripcion:"",unidades:""}])}>+ Anadir</button>
+          </div>
+          ${(en.materiales||[]).length===0&&html2`<p style=${{fontSize:12,color:"#94a3b8",padding:"6px 0"}}>Sin materiales. Pulsa + Anadir para agregar.</p>`}
+          ${(en.materiales||[]).map((mat,j)=>html2`
+            <div key=${j} style=${{display:"grid",gridTemplateColumns:"1fr 100px 32px",gap:8,marginBottom:6,alignItems:"center"}}>
+              <input class="fi" style=${{padding:"8px 10px",fontSize:13}} value=${mat.descripcion||""} onInput=${e=>{const m=[...(en.materiales||[])];m[j]={...m[j],descripcion:e.target.value};upd(i,"materiales",m);}} placeholder="Descripcion del material"/>
+              <input class="fi" style=${{padding:"8px 10px",fontSize:13,textAlign:"center"}} type="number" min="0" value=${mat.unidades||""} onInput=${e=>{const m=[...(en.materiales||[])];m[j]={...m[j],unidades:e.target.value};upd(i,"materiales",m);}} placeholder="Uds"/>
+              <button class="bd" style=${{padding:"6px 8px",fontSize:12}} onClick=${()=>upd(i,"materiales",(en.materiales||[]).filter((_,k)=>k!==j))}>X</button>
+            </div>`)}
+        </div>
       </div>`)}
       <div class="fg" style=${{marginTop:8}}>
         <label class="lb">Vehiculo (opcional)</label>
@@ -558,10 +575,6 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
           ${av.map(v=>html2`<option key=${v.matricula} value=${v.matricula}>${v.matricula}${v.descripcion?" - "+v.descripcion:""}</option>`)}
         </select>
       </div>
-      <div class="fg">
-        <label class="lb">Observaciones</label>
-        <textarea class="fi" rows="2" value=${obs} onInput=${e=>setObs(e.target.value)} style=${{resize:"vertical"}}></textarea>
-      </div>
       ${err&&html2`<p class="er">${err}</p>`}
       ${ok&&html2`<p class="ok">Parte guardado correctamente</p>`}
       <button class="bp" style=${{width:"100%",padding:14,fontSize:15,marginTop:8}} onClick=${sub}>Guardar parte</button>
@@ -569,9 +582,106 @@ function NuevoParte({sess,obras,partes,sP,vehiculos}){
   </div>`;
 }
 
-function ParteCard({p,obras,users,onDelete,onCopy}){
+function ModalEditParte({parte,obras,onClose,onSave}){
+  const ao=(obras||[]).filter(o=>o.active);
+  const [date,setDate]=useState(parte.date);
+  const [ents,setEnts]=useState((parte.entries||[]).map(e=>({...e})));
+  const [obs,setObs]=useState(parte.observaciones||"");
+  const [err,setErr]=useState("");
+
+  const upd=(i,f,v)=>{
+    let e=[...ents];e[i]={...e[i],[f]:v};
+    if(f==="horaEntrada"||f==="horaSalida"){
+      const ei=e[i];
+      const c=calcHoras(f==="horaEntrada"?v:ei.horaEntrada,f==="horaSalida"?v:ei.horaSalida);
+      e[i].horasNocturnas=c.horasNocturnas;e[i].totalHoras=c.totalHoras;
+      e=recalc(e);
+    }
+    if(f==="dieta"&&v)e[i].mediaDieta=false;
+    if(f==="mediaDieta"&&v)e[i].dieta=false;
+    if(f==="obra"){const ob=(obras||[]).find(o=>o.code===v);if(ob&&!e[i].observaciones)e[i].observaciones=ob.name;}
+    setEnts(e);
+  };
+
+  const guardar=()=>{
+    setErr("");
+    for(const e of ents){
+      if(!e.obra){setErr("Selecciona obra en todas las lineas");return;}
+      if(!e.horaEntrada||!e.horaSalida){setErr("Introduce hora entrada y salida");return;}
+      if(e.totalHoras<=0){setErr("Hora salida debe ser posterior a entrada");return;}
+    }
+    onSave({...parte,date,entries:ents});
+  };
+
+  return html2`<div class="mb" onClick=${e=>{if(e.target===e.currentTarget)onClose();}}>
+    <div class="md" style=${{maxWidth:660}}>
+      <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <h2 style=${{fontSize:17,fontWeight:800,color:"#1a3a5c"}}>Editar Parte</h2>
+        <button onClick=${onClose} style=${{border:"none",background:"#f1f5f9",borderRadius:8,width:32,height:32,cursor:"pointer",fontSize:16}}>X</button>
+      </div>
+      <div class="fg"><label class="lb">Fecha</label><input class="fi" type="date" value=${date} onInput=${e=>setDate(e.target.value)} style=${{maxWidth:200}}/></div>
+      <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <span style=${{fontSize:14,fontWeight:700,color:"#374151"}}>Lineas de trabajo</span>
+        <button class="bs" onClick=${()=>setEnts([...ents,{...ents[0],horaEntrada:"",horaSalida:"",totalHoras:0,horasOrdinarias:0,horasExtra:0,horasNocturnas:0}])}>+ Obra</button>
+      </div>
+      ${ents.map((en,i)=>html2`<div key=${i} class="ec">
+        <div style=${{display:"flex",justifyContent:"space-between",marginBottom:12}}>
+          <span style=${{fontWeight:800,color:"#1a3a5c",fontSize:13}}>Obra ${i+1}</span>
+          ${ents.length>1&&html2`<button class="bd" onClick=${()=>setEnts(recalc(ents.filter((_,j)=>j!==i)))}>X</button>`}
+        </div>
+        <div class="fg"><label class="lb">Obra</label>
+          <${ObraBuscador} obras=${obras} value=${en.obra} onChange=${v=>upd(i,"obra",v)}/>
+        </div>
+        <div style=${{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+          <div class="fg"><label class="lb">Entrada</label><input class="fi" type="time" value=${en.horaEntrada||""} onInput=${e=>upd(i,"horaEntrada",e.target.value)}/></div>
+          <div class="fg"><label class="lb">Salida</label><input class="fi" type="time" value=${en.horaSalida||""} onInput=${e=>upd(i,"horaSalida",e.target.value)}/></div>
+          <div class="fg"><label class="lb">Km</label><input class="fi" type="number" min="0" value=${en.km||""} onInput=${e=>upd(i,"km",e.target.value)} placeholder="0"/></div>
+        </div>
+        <div style=${{display:"flex",gap:12,marginTop:4,flexWrap:"wrap"}}>
+          ${[["dieta","Dieta"],["mediaDieta","1/2 Dieta"],["canasto","Canasto"]].map(([f,l])=>html2`
+            <label key=${f} style=${{display:"flex",alignItems:"center",gap:7,fontSize:14,cursor:"pointer",background:"#f8fafc",padding:"6px 12px",borderRadius:8,border:"1px solid #e2e8f0"}}>
+              <input type="checkbox" style=${{width:17,height:17,accentColor:"#1a3a5c"}} checked=${!!en[f]} onChange=${e=>upd(i,f,e.target.checked)}/>${l}
+            </label>`)}
+        </div>
+        ${en.horaEntrada&&en.horaSalida&&en.totalHoras>0&&html2`
+          <div style=${{display:"flex",flexWrap:"wrap",gap:7,marginTop:10}}>
+            <span class="bg2" style=${{background:"#dbeafe",color:"#1e40af"}}>Total: ${ents.reduce((s,x)=>s+(x.totalHoras||0),0).toFixed(1)}h</span>
+            <span class="bg2" style=${{background:"#dcfce7",color:"#15803d"}}>${en.horasOrdinarias}h ord</span>
+            ${en.horasExtra>0&&html2`<span class="bg2" style=${{background:"#ffedd5",color:"#c2410c"}}>${en.horasExtra}h ext</span>`}
+            ${en.horasNocturnas>0&&html2`<span class="bg2" style=${{background:"#ede9fe",color:"#6d28d9"}}>${en.horasNocturnas}h noc</span>`}
+          </div>`}
+        <div class="fg" style=${{marginTop:10,marginBottom:0}}>
+          <label class="lb">Observaciones</label>
+          <textarea class="fi" rows="2" value=${en.observaciones||""} onInput=${e=>upd(i,"observaciones",e.target.value)} placeholder="Trabajos realizados en esta obra..." style=${{resize:"vertical"}}></textarea>
+        </div>
+        <div style=${{marginTop:10}}>
+          <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <label class="lb" style=${{marginBottom:0}}>Materiales</label>
+            <button class="bs" style=${{padding:"4px 10px",fontSize:12}} onClick=${()=>upd(i,"materiales",[...(en.materiales||[]),{descripcion:"",unidades:""}])}>+ Anadir</button>
+          </div>
+          ${(en.materiales||[]).length===0&&html2`<p style=${{fontSize:12,color:"#94a3b8",padding:"6px 0"}}>Sin materiales.</p>`}
+          ${(en.materiales||[]).map((mat,j)=>html2`
+            <div key=${j} style=${{display:"grid",gridTemplateColumns:"1fr 100px 32px",gap:8,marginBottom:6,alignItems:"center"}}>
+              <input class="fi" style=${{padding:"8px 10px",fontSize:13}} value=${mat.descripcion||""} onInput=${e=>{const m=[...(en.materiales||[])];m[j]={...m[j],descripcion:e.target.value};upd(i,"materiales",m);}} placeholder="Descripcion del material"/>
+              <input class="fi" style=${{padding:"8px 10px",fontSize:13,textAlign:"center"}} type="number" min="0" value=${mat.unidades||""} onInput=${e=>{const m=[...(en.materiales||[])];m[j]={...m[j],unidades:e.target.value};upd(i,"materiales",m);}} placeholder="Uds"/>
+              <button class="bd" style=${{padding:"6px 8px",fontSize:12}} onClick=${()=>upd(i,"materiales",(en.materiales||[]).filter((_,k)=>k!==j))}>X</button>
+            </div>`)}
+        </div>
+      </div>`)}
+      ${err&&html2`<p class="er">${err}</p>`}
+      <div style=${{display:"flex",gap:10,marginTop:16}}>
+        <button class="bs" style=${{flex:1,padding:13}} onClick=${onClose}>Cancelar</button>
+        <button class="bp" style=${{flex:2,padding:13}} onClick=${guardar}>Guardar cambios</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+
+function ParteCard({p,obras,users,onDelete,onCopy,onEdit}){
   const [copyM,setCopyM]=useState(false);
   const [pdfM,setPdfM]=useState(false);
+  const [editM,setEditM]=useState(false);
   const w=(users||[]).find(u=>u.username===p.worker);
   const hO=(p.entries||[]).reduce((s,e)=>s+(e.horasOrdinarias||0),0);
   const hE=(p.entries||[]).reduce((s,e)=>s+(e.horasExtra||0),0);
@@ -587,6 +697,7 @@ function ParteCard({p,obras,users,onDelete,onCopy}){
         ${hE>0&&html2`<span class="bg2" style=${{background:"#ffedd5",color:"#c2410c"}}>${hE.toFixed(1)}h ext</span>`}
         ${hN>0&&html2`<span class="bg2" style=${{background:"#ede9fe",color:"#6d28d9"}}>${hN.toFixed(1)}h noc</span>`}
         <button style=${{padding:"7px 11px",borderRadius:8,border:"none",background:"#dcfce7",color:"#15803d",fontWeight:700,cursor:"pointer",fontSize:12}} onClick=${()=>setPdfM(true)}>PDF</button>
+          ${onEdit&&html2`<button style=${{padding:"7px 11px",borderRadius:8,border:"none",background:"#e0f2fe",color:"#0369a1",fontWeight:700,cursor:"pointer",fontSize:12}} onClick=${()=>setEditM(true)}>Editar</button>`}
         ${onCopy&&html2`<button class="bv" onClick=${()=>setCopyM(true)}>Copiar</button>`}
         ${onDelete&&html2`<button class="bd" onClick=${()=>{if(confirm("Eliminar?"))onDelete(p.id);}}>X</button>`}
       </div>
@@ -607,8 +718,21 @@ function ParteCard({p,obras,users,onDelete,onCopy}){
     })}
     ${p.vehiculo&&html2`<div style=${{marginTop:6,padding:"6px 10px",background:"#f0f9ff",borderRadius:8,fontSize:12,color:"#0369a1",display:"flex",alignItems:"center",gap:6}}><b>Matricula:</b> ${p.vehiculo}</div>`}
     ${p.observaciones&&html2`<div style=${{marginTop:6,padding:"7px 10px",background:"#f8fafc",borderRadius:8,fontSize:12,color:"#6b7280"}}><b>Obs:</b> ${p.observaciones}</div>`}
+    ${(p.entries||[]).some(e=>e.observaciones)&&(p.entries||[]).map((e,i)=>e.observaciones?html2`<div key=${i} style=${{marginTop:4,padding:"5px 10px",background:"#f8fafc",borderRadius:8,fontSize:12,color:"#6b7280"}}><span class="ct" style=${{fontSize:10,marginRight:6}}>${e.obra}</span>${e.observaciones}</div>`:null)}
+    ${(p.entries||[]).some(e=>(e.materiales||[]).length>0)&&html2`<div style=${{marginTop:6,padding:"8px 10px",background:"#fafafa",borderRadius:8,border:"1px solid #e2e8f0"}}>
+      <div style=${{fontSize:11,fontWeight:700,color:"#475569",textTransform:"uppercase",letterSpacing:".4px",marginBottom:6}}>Materiales</div>
+      <div style=${{display:"grid",gridTemplateColumns:"1fr auto",gap:"2px 12px"}}>
+        <span style=${{fontSize:11,fontWeight:700,color:"#6b7280"}}>Descripcion</span>
+        <span style=${{fontSize:11,fontWeight:700,color:"#6b7280",textAlign:"right"}}>Uds</span>
+        ${(p.entries||[]).flatMap(e=>(e.materiales||[]).filter(m=>m.descripcion)).map((m,i)=>html2`
+          <span key=${"d"+i} style=${{fontSize:13,color:"#374151"}}>${m.descripcion}</span>
+          <span key=${"u"+i} style=${{fontSize:13,color:"#374151",textAlign:"right",fontWeight:600}}>${m.unidades||"-"}</span>
+        `)}
+      </div>
+    </div>`}
     ${copyM&&html2`<${CopyModal} parte=${p} onClose=${()=>setCopyM(false)} onCopy=${onCopy}/>`}
     ${pdfM&&html2`<${ModalFirmas} parte=${p} obras=${obras} users=${users} onClose=${()=>setPdfM(false)}/>`}
+    ${editM&&onEdit&&html2`<${ModalEditParte} parte=${p} obras=${obras} onClose=${()=>setEditM(false)} onSave=${(updated)=>{onEdit(updated);setEditM(false);}}/>`}
   </div>`;
 }
 
@@ -666,6 +790,7 @@ function MisPartes({partes,obras,sP,allP,users}){
       sorted.map(p=>html2`<${ParteCard} key=${p.id} p=${p} obras=${obras} users=${users}
         onDelete=${id=>sP((allP||[]).filter(x=>x.id!==id))}
         onCopy=${fechas=>{const n=fechas.map(f=>({...p,date:f,id:Date.now()+Math.random()}));sP([...(allP||[]),...n]);}}
+        onEdit=${updated=>sP((allP||[]).map(x=>x.id===updated.id?updated:x))}
       />`)}
   </div>`;
 }
@@ -718,6 +843,7 @@ function TodosPartes({partes,obras,users,sP}){
       fl.map(p=>html2`<${ParteCard} key=${p.id} p=${p} obras=${obras} users=${users}
         onDelete=${id=>sP((partes||[]).filter(x=>x.id!==id))}
         onCopy=${fechas=>{const n=fechas.map(f=>({...p,date:f,id:Date.now()+Math.random()}));sP([...(partes||[]),...n]);}}
+        onEdit=${updated=>sP((partes||[]).map(x=>x.id===updated.id?updated:x))}
       />`)}
   </div>`;
 }
@@ -735,8 +861,8 @@ function Excel({partes,obras,users}){
   const expW=()=>{
     if(!window.XLSX){alert("Espera");return;}
     const wb=window.XLSX.utils.book_new();
-    const det=[["Trabajador","Fecha","Codigo","Obra","Entrada","Salida","H.Ord","H.Extra","H.Noc","Km","Dieta","1/2Dieta","Canasto","Vehiculo"]];
-    fl.forEach(p=>{const w=ws.find(u=>u.username===p.worker);(p.entries||[]).forEach(e=>{const o=(obras||[]).find(ob=>ob.code===e.obra);const[y,m,d]=p.date.split("-");det.push([w?w.name:p.worker,d+"/"+m+"/"+y,e.obra,o?o.name:"",e.horaEntrada||"",e.horaSalida||"",e.horasOrdinarias||0,e.horasExtra||0,e.horasNocturnas||0,parseFloat(e.km)||0,e.dieta?1:0,e.mediaDieta?1:0,e.canasto?1:0,p.vehiculo||""]);});});
+    const det=[["Trabajador","Fecha","Codigo","Obra","Entrada","Salida","H.Ord","H.Extra","H.Noc","Km","Dieta","1/2Dieta","Canasto","Vehiculo","Observaciones","Materiales","Unidades"]];
+    fl.forEach(p=>{const w=ws.find(u=>u.username===p.worker);(p.entries||[]).forEach(e=>{const o=(obras||[]).find(ob=>ob.code===e.obra);const[y,m,d]=p.date.split("-");det.push([w?w.name:p.worker,d+"/"+m+"/"+y,e.obra,o?o.name:"",e.horaEntrada||"",e.horaSalida||"",e.horasOrdinarias||0,e.horasExtra||0,e.horasNocturnas||0,parseFloat(e.km)||0,e.dieta?1:0,e.mediaDieta?1:0,e.canasto?1:0,p.vehiculo||"",e.observaciones||"",(e.materiales||[]).map(m=>m.descripcion).filter(Boolean).join(", "),(e.materiales||[]).map(m=>m.unidades||"").filter((_,i)=>(e.materiales||[])[i]&&(e.materiales||[])[i].descripcion).join(", ")]);});});
     const res=[["Trabajador","H.Ord","H.Extra","H.Noc","Km","Dietas","1/2D","Canastos","Partes"]];
     ws.forEach(w=>{const wp=fl.filter(p=>p.worker===w.username);const we=wp.flatMap(p=>p.entries||[]);if(!we.length)return;res.push([w.name,we.reduce((s,e)=>s+(e.horasOrdinarias||0),0),we.reduce((s,e)=>s+(e.horasExtra||0),0),we.reduce((s,e)=>s+(e.horasNocturnas||0),0),we.reduce((s,e)=>s+(parseFloat(e.km)||0),0),we.reduce((s,e)=>s+(e.dieta?1:0),0),we.reduce((s,e)=>s+(e.mediaDieta?1:0),0),we.reduce((s,e)=>s+(e.canasto?1:0),0),wp.length]);});
     const s1=window.XLSX.utils.aoa_to_sheet(det);s1["!cols"]=det[0].map(()=>({wch:18}));window.XLSX.utils.book_append_sheet(wb,s1,"Detalle");
