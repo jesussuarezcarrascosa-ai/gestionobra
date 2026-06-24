@@ -6,7 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="theme-color" content="#1a3a5c"/>
-<title>GestionObras Pro</title>
+<title>GestionObras Pro</title><!-- v1782282281 -->
 <script src="https://unpkg.com/preact@10/dist/preact.umd.js"></script>
 <script src="https://unpkg.com/preact@10/hooks/dist/hooks.umd.js"></script>
 <script src="https://unpkg.com/htm@3/dist/htm.umd.js"></script>
@@ -473,8 +473,8 @@ function Vehiculos({vehiculos,sV}){
           </div>
           <div style=${{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             <span class="bg2" style=${{background:v.activo?"#dcfce7":"#fee2e2",color:v.activo?"#16a34a":"#dc2626"}}>${v.activo?"Activo":"Inactivo"}</span>
-            <button class="bw" onClick=${()=>sV((vehiculos||[]).map(x=>x.matricula===v.matricula?{...x,activo:!x.activo}:x))}>${v.activo?"Desactivar":"Activar"}</button>
-            <button class="bd" onClick=${()=>{if(confirm("Eliminar "+v.matricula+"?"))sV((vehiculos||[]).filter(x=>x.matricula!==v.matricula));}}>X</button>
+            <button class="bw" onClick=${()=>{const nueva=(vehiculos||[]).map(x=>x.matricula===v.matricula?{...x,activo:!x.activo}:x);sV(nueva);}}>${v.activo?"Desactivar":"Activar"}</button>
+            <button class="bd" onClick=${()=>{if(confirm("Eliminar "+v.matricula+"?")){const nueva=(vehiculos||[]).filter(x=>x.matricula!==v.matricula);sV(nueva);}}}>X</button>
           </div>
         </div>`)}
     </div>
