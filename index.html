@@ -112,20 +112,23 @@ function App(){
   const [users,setUR]=useState(null);
   const [obras,setOR]=useState(null);
   const [partes,setPR]=useState(null);
+  const [vehiculos,setVR]=useState(null);
   const [sess,setSess]=useState(null);
   const [page,setPage]=useState("login");
   const [loading,setLoading]=useState(true);
   useEffect(()=>{
     (async()=>{
       try{
-        const[u,o,p]=await Promise.all([fb.get("users"),fb.get("obras"),fb.get("partes")]);
+        const[u,o,p,v]=await Promise.all([fb.get("users"),fb.get("obras"),fb.get("partes"),fb.get("vehiculos")]);
         const fu=(Array.isArray(u)&&u.length)?u:ls.g("users",[IM,...IW]);
         const fo=(Array.isArray(o)&&o.length)?o:ls.g("obras",IO);
         const fp=Array.isArray(p)?p:ls.g("partes",[]);
-        setUR(fu);setOR(fo);setPR(fp);
+        const fv=Array.isArray(v)?v:ls.g("vehiculos",[]);
+        setUR(fu);setOR(fo);setPR(fp);setVR(fv);
         if(!Array.isArray(u)||!u.length)fb.set("users",fu);
         if(!Array.isArray(o)||!o.length)fb.set("obras",fo);
         if(!Array.isArray(p))fb.set("partes",fp);
+        if(!Array.isArray(v))fb.set("vehiculos",[]);
       }catch(e){
         setUR(ls.g("users",[IM,...IW]));
         setOR(ls.g("obras",IO));
@@ -137,6 +140,7 @@ function App(){
   const sU=useCallback(async v=>{setUR(v);await fb.set("users",v);},[]);
   const sO=useCallback(async v=>{setOR(v);await fb.set("obras",v);},[]);
   const sP=useCallback(async v=>{setPR(v);await fb.set("partes",v);},[]);
+  const sV=useCallback(async v=>{setVR(v);await fb.set("vehiculos",v);},[]);
   const login=(u,p)=>{
     const usr=(users||[]).find(x=>x.username===u&&x.password===p);
     if(!usr)return false;
@@ -207,13 +211,14 @@ function Layout({sess,page,setPage,logout,links,isMgr,children}){
   </div>`;
 }
 
-function Admin({sess,obras,sO,partes,sP,page,setPage,logout,users,sU}){
+function Admin({sess,obras,sO,partes,sP,page,setPage,logout,users,sU,vehiculos,sV}){
   const lks=[
     {id:"dash",label:"Inicio",i:"M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"},
     {id:"obras",label:"Obras",i:"M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"},
     {id:"partes",label:"Partes",i:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"},
     {id:"equipo",label:"Equipo",i:"M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"},
     {id:"excel",label:"Excel",i:"M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8zM14 2v6h6M16 13H8"},
+    {id:"vehiculos",label:"Vehiculos",i:"M8 18h8M10 6h4l2 6H8l2-6zM3 18h2v-2H3v2zM19 18h2v-2h-2v2zM5 16h14M4 10h16"},
   ];
   return html2`<${Layout} sess=${sess} page=${page} setPage=${setPage} logout=${logout} links=${lks} isMgr=${true}>
     ${page==="dash"&&html2`<${Dash} partes=${partes} obras=${obras} users=${users}/>`}
@@ -221,10 +226,11 @@ function Admin({sess,obras,sO,partes,sP,page,setPage,logout,users,sU}){
     ${page==="partes"&&html2`<${TodosPartes} partes=${partes} obras=${obras} users=${users} sP=${sP}/>`}
     ${page==="equipo"&&html2`<${Equipo} users=${users} sU=${sU}/>`}
     ${page==="excel"&&html2`<${Excel} partes=${partes} obras=${obras} users=${users}/>`}
+    ${page==="vehiculos"&&html2`<${Vehiculos} vehiculos=${vehiculos} sV=${sV}/>`}
   </${Layout}>`;
 }
 
-function Worker({sess,obras,partes,sP,page,setPage,logout,users,sU}){
+function Worker({sess,obras,partes,sP,page,setPage,logout,users,sU,vehiculos}){
   const lks=[
     {id:"nuevo",label:"Nuevo",i:"M12 5v14M5 12h14"},
     {id:"mispartes",label:"Mis Partes",i:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"},
@@ -232,13 +238,13 @@ function Worker({sess,obras,partes,sP,page,setPage,logout,users,sU}){
   ];
   const myP=(partes||[]).filter(p=>p.worker===sess.username);
   return html2`<${Layout} sess=${sess} page=${page} setPage=${setPage} logout=${logout} links=${lks} isMgr=${false}>
-    ${page==="nuevo"&&html2`<${NuevoParte} sess=${sess} obras=${obras} partes=${partes} sP=${sP}/>`}
+    ${page==="nuevo"&&html2`<${NuevoParte} sess=${sess} obras=${obras} partes=${partes} sP=${sP} vehiculos=${vehiculos}/>`}
     ${page==="mispartes"&&html2`<${MisPartes} partes=${myP} obras=${obras} sP=${sP} allP=${partes} users=${users}/>`}
     ${page==="cuenta"&&html2`<${MiCuenta} sess=${sess} users=${users} sU=${sU}/>`}
   </${Layout}>`;
 }
 
-function Capataz({sess,obras,partes,sP,page,setPage,logout,users,sU}){
+function Capataz({sess,obras,partes,sP,page,setPage,logout,users,sU,vehiculos}){
   const lks=[
     {id:"nuevo",label:"Nuevo",i:"M12 5v14M5 12h14"},
     {id:"mispartes",label:"Mis Partes",i:"M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2"},
@@ -246,7 +252,7 @@ function Capataz({sess,obras,partes,sP,page,setPage,logout,users,sU}){
   ];
   const myP=(partes||[]).filter(p=>p.worker===sess.username);
   return html2`<${Layout} sess=${sess} page=${page} setPage=${setPage} logout=${logout} links=${lks} isMgr=${false}>
-    ${page==="nuevo"&&html2`<${NuevoParte} sess=${sess} obras=${obras} partes=${partes} sP=${sP}/>`}
+    ${page==="nuevo"&&html2`<${NuevoParte} sess=${sess} obras=${obras} partes=${partes} sP=${sP} vehiculos=${vehiculos}/>`}
     ${page==="mispartes"&&html2`<${MisPartesCapataz} partes=${myP} obras=${obras} sP=${sP} allP=${partes} users=${users}/>`}
     ${page==="cuenta"&&html2`<${MiCuenta} sess=${sess} users=${users} sU=${sU}/>`}
   </${Layout}>`;
@@ -406,12 +412,56 @@ function ObraBuscador({obras,value,onChange}){
   </div>`;
 }
 
-function NuevoParte({sess,obras,partes,sP}){
+function Vehiculos({vehiculos,sV}){
+  const [mat,setMat]=useState("");
+  const [desc,setDesc]=useState("");
+  const [err,setE]=useState("");
+  const [ok,setOk]=useState("");
+  const add=()=>{
+    const m=mat.trim().toUpperCase().replace(/ /g,"");
+    if(!m){setE("Introduce la matricula");return;}
+    if((vehiculos||[]).find(v=>v.matricula===m)){setE("Esa matricula ya existe");return;}
+    sV([...(vehiculos||[]),{matricula:m,descripcion:desc.trim(),activo:true}]);
+    setMat("");setDesc("");setE("");setOk("Vehiculo anadido");setTimeout(()=>setOk(""),3000);
+  };
+  return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:700}}>
+    <h2 class="pt">Vehiculos</h2>
+    <div class="cd">
+      <h3 class="ctit">Anadir vehiculo</h3>
+      <div class="fg"><label class="lb">Matricula</label><input class="fi" value=${mat} onInput=${e=>setMat(e.target.value)} placeholder="1234ABC" autocapitalize="characters" autocorrect="off"/></div>
+      <div class="fg"><label class="lb">Descripcion (opcional)</label><input class="fi" value=${desc} onInput=${e=>setDesc(e.target.value)} placeholder="ej: Furgoneta blanca"/></div>
+      ${err&&html2`<p class="er">${err}</p>`}
+      ${ok&&html2`<p class="ok">${ok}</p>`}
+      <button class="bp" style=${{marginTop:8,width:"100%"}} onClick=${add}>+ Anadir vehiculo</button>
+    </div>
+    <div class="cd">
+      <h3 class="ctit">Vehiculos (${(vehiculos||[]).length})</h3>
+      ${(vehiculos||[]).length===0?html2`<p class="em">Sin vehiculos. Anade el primero.</p>`:""}
+      ${(vehiculos||[]).map(v=>html2`
+        <div key=${v.matricula} style=${{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #f1f5f9",gap:8,flexWrap:"wrap"}}>
+          <div style=${{display:"flex",alignItems:"center",gap:12}}>
+            <span class="ct" style=${{fontSize:14,padding:"5px 12px"}}>${v.matricula}</span>
+            ${v.descripcion&&html2`<span style=${{fontSize:14,color:"#374151"}}>${v.descripcion}</span>`}
+          </div>
+          <div style=${{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+            <span class="bg2" style=${{background:v.activo?"#dcfce7":"#fee2e2",color:v.activo?"#16a34a":"#dc2626"}}>${v.activo?"Activo":"Inactivo"}</span>
+            <button class="bw" onClick=${()=>sV((vehiculos||[]).map(x=>x.matricula===v.matricula?{...x,activo:!x.activo}:x))}>${v.activo?"Desactivar":"Activar"}</button>
+            <button class="bd" onClick=${()=>{if(confirm("Eliminar "+v.matricula+"?"))sV((vehiculos||[]).filter(x=>x.matricula!==v.matricula));}}>X</button>
+          </div>
+        </div>`)}
+    </div>
+  </div>`;
+}
+
+
+function NuevoParte({sess,obras,partes,sP,vehiculos}){
   const ao=(obras||[]).filter(o=>o.active);
+  const av=(vehiculos||[]).filter(v=>v.activo);
   const [date,setDate]=useState(hoy);
   const [ents,setEnts]=useState([eVacio(obras)]);
   const primeraObra=ao[0];
   const [obs,setObs]=useState(primeraObra?primeraObra.name:"");
+  const [vehiculo,setVehiculo]=useState("");
   const [ok,setOk]=useState(false);const [err,setErr]=useState("");
   const upd=(i,f,v)=>{
     let e=[...ents];e[i]={...e[i],[f]:v};
@@ -433,8 +483,8 @@ function NuevoParte({sess,obras,partes,sP}){
       if(!e.horaEntrada||!e.horaSalida){setErr("Introduce hora entrada y salida");return;}
       if(e.totalHoras<=0){setErr("Hora salida debe ser posterior a entrada");return;}
     }
-    sP([...(partes||[]),{date,worker:sess.username,entries:ents,observaciones:obs,id:Date.now()}]);
-    setOk(true);setEnts([eVacio(obras)]);setObs(primeraObra?primeraObra.name:"");
+    sP([...(partes||[]),{date,worker:sess.username,entries:ents,observaciones:obs,vehiculo:vehiculo,id:Date.now()}]);
+    setOk(true);setEnts([eVacio(obras)]);setObs(primeraObra?primeraObra.name:"");setVehiculo("");
     setTimeout(()=>setOk(false),3000);
   };
   return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:700}}>
@@ -474,6 +524,13 @@ function NuevoParte({sess,obras,partes,sP}){
           </div>`}
       </div>`)}
       <div class="fg" style=${{marginTop:8}}>
+        <label class="lb">Vehiculo (opcional)</label>
+        <select class="fi" value=${vehiculo} onChange=${e=>setVehiculo(e.target.value)}>
+          <option value="">Sin vehiculo</option>
+          ${av.map(v=>html2`<option key=${v.matricula} value=${v.matricula}>${v.matricula}${v.descripcion?" - "+v.descripcion:""}</option>`)}
+        </select>
+      </div>
+      <div class="fg">
         <label class="lb">Observaciones</label>
         <textarea class="fi" rows="2" value=${obs} onInput=${e=>setObs(e.target.value)} style=${{resize:"vertical"}}></textarea>
       </div>
@@ -520,7 +577,8 @@ function ParteCard({p,obras,users,onDelete,onCopy}){
         ${e.canasto&&html2`<span class="bg2" style=${{background:"#dcfce7",color:"#15803d"}}>Canasto</span>`}
       </div>`;
     })}
-    ${p.observaciones&&html2`<div style=${{marginTop:8,padding:"7px 10px",background:"#f8fafc",borderRadius:8,fontSize:12,color:"#6b7280"}}><b>Obs:</b> ${p.observaciones}</div>`}
+    ${p.vehiculo&&html2`<div style=${{marginTop:6,padding:"6px 10px",background:"#f0f9ff",borderRadius:8,fontSize:12,color:"#0369a1",display:"flex",alignItems:"center",gap:6}}><b>Matricula:</b> ${p.vehiculo}</div>`}
+    ${p.observaciones&&html2`<div style=${{marginTop:6,padding:"7px 10px",background:"#f8fafc",borderRadius:8,fontSize:12,color:"#6b7280"}}><b>Obs:</b> ${p.observaciones}</div>`}
     ${copyM&&html2`<${CopyModal} parte=${p} onClose=${()=>setCopyM(false)} onCopy=${onCopy}/>`}
     ${pdfM&&html2`<${ModalFirmas} parte=${p} obras=${obras} users=${users} onClose=${()=>setPdfM(false)}/>`}
   </div>`;
@@ -649,8 +707,8 @@ function Excel({partes,obras,users}){
   const expW=()=>{
     if(!window.XLSX){alert("Espera");return;}
     const wb=window.XLSX.utils.book_new();
-    const det=[["Trabajador","Fecha","Codigo","Obra","Entrada","Salida","H.Ord","H.Extra","H.Noc","Km","Dieta","1/2Dieta","Canasto"]];
-    fl.forEach(p=>{const w=ws.find(u=>u.username===p.worker);(p.entries||[]).forEach(e=>{const o=(obras||[]).find(ob=>ob.code===e.obra);const[y,m,d]=p.date.split("-");det.push([w?w.name:p.worker,d+"/"+m+"/"+y,e.obra,o?o.name:"",e.horaEntrada||"",e.horaSalida||"",e.horasOrdinarias||0,e.horasExtra||0,e.horasNocturnas||0,parseFloat(e.km)||0,e.dieta?1:0,e.mediaDieta?1:0,e.canasto?1:0]);});});
+    const det=[["Trabajador","Fecha","Codigo","Obra","Entrada","Salida","H.Ord","H.Extra","H.Noc","Km","Dieta","1/2Dieta","Canasto","Vehiculo"]];
+    fl.forEach(p=>{const w=ws.find(u=>u.username===p.worker);(p.entries||[]).forEach(e=>{const o=(obras||[]).find(ob=>ob.code===e.obra);const[y,m,d]=p.date.split("-");det.push([w?w.name:p.worker,d+"/"+m+"/"+y,e.obra,o?o.name:"",e.horaEntrada||"",e.horaSalida||"",e.horasOrdinarias||0,e.horasExtra||0,e.horasNocturnas||0,parseFloat(e.km)||0,e.dieta?1:0,e.mediaDieta?1:0,e.canasto?1:0,p.vehiculo||""]);});});
     const res=[["Trabajador","H.Ord","H.Extra","H.Noc","Km","Dietas","1/2D","Canastos","Partes"]];
     ws.forEach(w=>{const wp=fl.filter(p=>p.worker===w.username);const we=wp.flatMap(p=>p.entries||[]);if(!we.length)return;res.push([w.name,we.reduce((s,e)=>s+(e.horasOrdinarias||0),0),we.reduce((s,e)=>s+(e.horasExtra||0),0),we.reduce((s,e)=>s+(e.horasNocturnas||0),0),we.reduce((s,e)=>s+(parseFloat(e.km)||0),0),we.reduce((s,e)=>s+(e.dieta?1:0),0),we.reduce((s,e)=>s+(e.mediaDieta?1:0),0),we.reduce((s,e)=>s+(e.canasto?1:0),0),wp.length]);});
     const s1=window.XLSX.utils.aoa_to_sheet(det);s1["!cols"]=det[0].map(()=>({wch:18}));window.XLSX.utils.book_append_sheet(wb,s1,"Detalle");
@@ -690,7 +748,78 @@ function Excel({partes,obras,users}){
     });
     window.XLSX.writeFile(wb,mnames[month]+"_"+year+"_nominas.xlsx");
   };
-  return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:800}}>
+  
+  const expObras=()=>{
+    if(!window.XLSX){alert("Espera");return;}
+    const wb=window.XLSX.utils.book_new();
+
+    // Sheet 1: Resumen por obra
+    const resumen=[["Codigo","Nombre Obra","H.Ordinarias","H.Extra","H.Nocturnas","Km","Dietas","1/2 Dietas","Canastos","Num.Partes"]];
+    const ao=(obras||[]).filter(o=>o.active);
+    ao.forEach(obra=>{
+      const partesObra=fl.filter(p=>(p.entries||[]).some(e=>e.obra===obra.code));
+      const entriesObra=fl.flatMap(p=>(p.entries||[]).filter(e=>e.obra===obra.code));
+      if(!entriesObra.length)return;
+      resumen.push([
+        obra.code,
+        obra.name,
+        entriesObra.reduce((s,e)=>s+(e.horasOrdinarias||0),0).toFixed(2),
+        entriesObra.reduce((s,e)=>s+(e.horasExtra||0),0).toFixed(2),
+        entriesObra.reduce((s,e)=>s+(e.horasNocturnas||0),0).toFixed(2),
+        entriesObra.reduce((s,e)=>s+(parseFloat(e.km)||0),0).toFixed(0),
+        entriesObra.reduce((s,e)=>s+(e.dieta?1:0),0),
+        entriesObra.reduce((s,e)=>s+(e.mediaDieta?1:0),0),
+        entriesObra.reduce((s,e)=>s+(e.canasto?1:0),0),
+        partesObra.length
+      ]);
+    });
+    // Totales
+    resumen.push([
+      "TOTAL","",
+      resumen.slice(1).reduce((s,r)=>s+parseFloat(r[2]||0),0).toFixed(2),
+      resumen.slice(1).reduce((s,r)=>s+parseFloat(r[3]||0),0).toFixed(2),
+      resumen.slice(1).reduce((s,r)=>s+parseFloat(r[4]||0),0).toFixed(2),
+      resumen.slice(1).reduce((s,r)=>s+parseFloat(r[5]||0),0),
+      resumen.slice(1).reduce((s,r)=>s+(r[6]||0),0),
+      resumen.slice(1).reduce((s,r)=>s+(r[7]||0),0),
+      resumen.slice(1).reduce((s,r)=>s+(r[8]||0),0),
+      resumen.slice(1).reduce((s,r)=>s+(r[9]||0),0)
+    ]);
+    const ws1=window.XLSX.utils.aoa_to_sheet(resumen);
+    ws1["!cols"]=[{wch:12},{wch:40},{wch:14},{wch:10},{wch:12},{wch:8},{wch:8},{wch:10},{wch:10},{wch:12}];
+    window.XLSX.utils.book_append_sheet(wb,ws1,"Resumen por Obra");
+
+    // Sheet 2: Detalle por obra (todos los trabajadores y fechas)
+    const detalle=[["Codigo Obra","Nombre Obra","Trabajador","Fecha","Entrada","Salida","H.Ord","H.Extra","H.Noc","Km","Dieta","1/2 Dieta","Canasto","Observaciones"]];
+    ao.forEach(obra=>{
+      const entriesObra=fl.flatMap(p=>{
+        const es=(p.entries||[]).filter(e=>e.obra===obra.code);
+        return es.map(e=>({...e,date:p.date,worker:p.worker,obs:p.observaciones||""}));
+      });
+      if(!entriesObra.length)return;
+      entriesObra.sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{
+        const w=(users||[]).find(u=>u.username===e.worker);
+        const[y,m,d]=e.date.split("-");
+        detalle.push([
+          obra.code,obra.name,
+          w?w.name:e.worker,
+          d+"/"+m+"/"+y,
+          e.horaEntrada||"",e.horaSalida||"",
+          e.horasOrdinarias||0,e.horasExtra||0,e.horasNocturnas||0,
+          parseFloat(e.km)||0,
+          e.dieta?1:0,e.mediaDieta?1:0,e.canasto?1:0,
+          e.obs
+        ]);
+      });
+    });
+    const ws2=window.XLSX.utils.aoa_to_sheet(detalle);
+    ws2["!cols"]=[{wch:12},{wch:35},{wch:28},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:6},{wch:6},{wch:8},{wch:8},{wch:30}];
+    window.XLSX.utils.book_append_sheet(wb,ws2,"Detalle por Obra");
+
+    window.XLSX.writeFile(wb,"informe_obras.xlsx");
+  };
+
+return html2`<div class="pw" style=${{padding:"24px 20px",maxWidth:800}}>
     <h2 class="pt">Informes Excel</h2>
     <div class="cd">
       <h3 class="ctit">Periodo</h3>
@@ -701,10 +830,15 @@ function Excel({partes,obras,users}){
       <button class="bs" style=${{marginTop:12}} onClick=${()=>{setDf("");setDt("");}}>Limpiar</button>
       <div style=${{marginTop:12,padding:"10px 14px",background:"#f0f9ff",borderRadius:8,fontSize:13,color:"#0369a1",fontWeight:600}}>${fl.length} partes / ${hO.toFixed(1)}h ord / ${hE.toFixed(1)}h ext / ${km.toFixed(0)} km</div>
     </div>
-    <div class="tc" style=${{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+    <div class="tc" style=${{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:16,marginBottom:16}}>
       <div class="cd" style=${{textAlign:"center"}}>
         <h3 style=${{fontWeight:800,marginBottom:16}}>Por Trabajador</h3>
         <button class="bp" style=${{width:"100%",padding:13}} onClick=${expW}>Descargar Excel</button>
+      </div>
+      <div class="cd" style=${{textAlign:"center"}}>
+        <h3 style=${{fontWeight:800,marginBottom:16}}>Por Obra</h3>
+        <p style=${{color:"#6b7280",fontSize:13,marginBottom:16}}>Horas y gastos por cada obra</p>
+        <button class="bp" style=${{width:"100%",padding:13,background:"#065f46"}} onClick=${expObras}>Descargar Excel</button>
       </div>
       <div class="cd" style=${{textAlign:"center"}}>
         <h3 style=${{fontWeight:800,marginBottom:12}}>Nominas</h3>
